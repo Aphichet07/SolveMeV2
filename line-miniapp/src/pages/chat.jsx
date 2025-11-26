@@ -19,6 +19,7 @@ export default function ChatPage({ profile, matchId, bubble, otherUser, onBack, 
     const [text, setText] = useState("");
     const [sending, setSending] = useState(false);
     const [showEndConfirm, setShowEndConfirm] = useState(false);
+    const [endMode, setEndMode] = useState("exit");
 
     const listRef = useRef(null);
     const userId = profile?.userId;
@@ -135,13 +136,73 @@ export default function ChatPage({ profile, matchId, bubble, otherUser, onBack, 
         }
     };
 
+    const handleCompleteChat = async () => {
+        if (role !== "requester") {
+            // กันพลาด ถ้าไม่ได้เป็น requester ไม่ควรเรียกฟังก์ชันนี้
+            await handleEndChat();
+            return;
+        }
+
+        try {
+            const solverId =
+                otherUser?.userId ||
+                otherUser?.id ||
+                otherUser?.uid ||
+                null;
+
+            if (!matchId || !userId || !solverId) {
+                console.warn("Missing ids for complete chat:", {
+                    matchId,
+                    requesterId: userId,
+                    solverId,
+                });
+                await handleEndChat();
+                return;
+            }
+
+            // เรียก API ฝั่ง back เพื่ออัปเดต stat + แต้ม
+            await fetch(`${API_BASE}/api/chat/complete`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    match_id: matchId,
+                    bubble_id: bubble?.id || bubble?.bubble_id || bubble?._id || null,
+                    requester_id: userId,
+                    solver_id: solverId,
+                    // point: 10, // ถ้าจะส่งจำนวนแต้มคงที่ก็ใส่เพิ่มทีหลังได้
+                }),
+            }).catch((err) => {
+                console.error("complete chat api error:", err);
+            });
+        } catch (err) {
+            console.error("handleCompleteChat error:", err);
+        } finally {
+            // ไม่ว่า API จะผ่านหรือไม่ ก็จบแชทให้ user ไปก่อน
+            await handleEndChat();
+        }
+    };
+
+    // ⭐ NEW: ใช้ตัวกลางตัดสินใจว่าเป็นการออกเฉย ๆ หรือ complete ภารกิจ
+    const handleEndConfirm = async () => {
+        if (endMode === "complete") {
+            await handleCompleteChat();
+        } else {
+            await handleEndChat();
+        }
+    };
+
     return (
         <div className="h-screen bg-white flex flex-col relative">
             {/* Header */}
             <header className="pt-2 pb-1 px-4 border-b border-slate-100">
                 <div className="flex items-center gap-2 mb-1">
                     <button
-                        onClick={() => setShowEndConfirm(true)}
+                        onClick={() => { 
+                            setEndMode("exit")
+                            setShowEndConfirm(true) 
+                             }}
                         className="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center text-slate-700 text-sm"
                     >
                         ←
@@ -155,6 +216,24 @@ export default function ChatPage({ profile, matchId, bubble, otherUser, onBack, 
                                 {bubble.title}
                             </span>
                         )}
+                        {role === "requester" && (
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setEndMode("complete");
+                                setShowEndConfirm(true);
+                            }}
+                            className="
+                                ml-2 px-3 h-7 rounded-full
+                                bg-emerald-500 text-white text-[11px]
+                                flex items-center justify-center
+                                shadow-[0_1px_4px_rgba(16,185,129,0.4)]
+                                active:scale-95
+                            "
+                        >
+                            เสร็จสิ้น
+                        </button>
+                    )}
                     </div>
                 </div>
             </header>
@@ -317,7 +396,7 @@ export default function ChatPage({ profile, matchId, bubble, otherUser, onBack, 
             <EndChatConfirmModal
                 open={showEndConfirm}
                 onCancel={() => setShowEndConfirm(false)}
-                onConfirm={handleEndChat}
+                onConfirm={handleEndConfirm}
             />
         </div>
     );

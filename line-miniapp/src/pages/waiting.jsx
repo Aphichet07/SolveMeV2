@@ -34,7 +34,6 @@ export default function WaitingForSolverPage({ bubble, onBack, onMatched }) {
                     setStatus("matched");
                     setMatchId(data.roomId || data.matchId || null);
 
-                    // เก็บ solver แบบง่าย ๆ ไว้เป็น otherUser
                     setMatchedSolver({
                         lineId: data.solverId,
                         name: "Solver",   // ถ้าอยากสวยให้ไปยิง API ขอ profile เพิ่ม
