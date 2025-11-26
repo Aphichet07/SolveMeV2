@@ -1,7 +1,7 @@
 import * as line from "@line/bot-sdk";
 
 const client = new line.messagingApi.MessagingApiClient({
-  channelAccessToken: "ZjyCK6EqJ44JuvWiDLfnkmK5YrEx0nCHXqwv3Jf2MAtlais00aw8jenegatlu7wXJQGgosnvRuZgFzs/fQYMILk4W3gcwzTdG8ZQnmardcYsKioC2b9tZiUOqIccKF9ApoDAkopIsHglBmbMmHY6dAdB04t89/1O/w1cDnyilFU=", 
+  channelAccessToken: process.env.CHANAL_ACCESS_TOKEN, 
 });
 
 const LIFF_URL =
