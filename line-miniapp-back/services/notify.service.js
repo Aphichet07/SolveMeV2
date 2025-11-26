@@ -1,0 +1,61 @@
+import * as line from "@line/bot-sdk";
+
+const client = new line.messagingApi.MessagingApiClient({
+  channelAccessToken: "ZjyCK6EqJ44JuvWiDLfnkmK5YrEx0nCHXqwv3Jf2MAtlais00aw8jenegatlu7wXJQGgosnvRuZgFzs/fQYMILk4W3gcwzTdG8ZQnmardcYsKioC2b9tZiUOqIccKF9ApoDAkopIsHglBmbMmHY6dAdB04t89/1O/w1cDnyilFU=", 
+});
+
+const LIFF_URL =
+  process.env.LIFF_URL || "https://miniapp.line.me/2008545281-9GrjpXG7";
+
+async function sendMatchNotificationToSolver({ solverLineId, roomId, bubble }) {
+  if (!solverLineId) {
+    console.warn("No solverLineId provided to sendMatchNotificationToSolver");
+    return;
+  }
+
+  const bubbleId = bubble?.id;
+  const deepLink = `${LIFF_URL}?roomId=${encodeURIComponent(
+    roomId
+  )}&bubbleId=${encodeURIComponent(bubbleId || "")}`;
+
+  console.log("[LINE PUSH] to       =", solverLineId);
+  console.log("[LINE PUSH] roomId   =", roomId);
+  console.log("[LINE PUSH] bubbleId =", bubbleId);
+  console.log("[LINE PUSH] url      =", deepLink);
+
+  try {
+    await client.pushMessage({
+      to: solverLineId,
+      messages: [
+        {
+          type: "template",
+          altText: "SolveMe: คุณได้รับเคสใหม่",
+          template: {
+            type: "buttons",
+            title: bubble?.title?.slice(0, 40) || "คุณได้รับเคสใหม่",
+            text:
+              bubble?.description?.slice(0, 60) ||
+              "มีคนต้องการความช่วยเหลือใกล้คุณ กดเพื่อเข้าไปยังห้องแชท",
+            actions: [
+              {
+                type: "uri",
+                label: "เข้าไปช่วยเลย",
+                uri: deepLink, 
+              },
+            ],
+          },
+        },
+      ],
+    });
+
+    console.log("[LINE PUSH] success");
+  } catch (err) {
+    console.error("[LINE PUSH] error status =", err.status);
+    console.error("[LINE PUSH] error body   =", err.body);
+
+  }
+}
+
+export default {
+  sendMatchNotificationToSolver,
+};
