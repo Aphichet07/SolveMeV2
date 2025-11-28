@@ -53,7 +53,7 @@ const bubbleController = {
                 req.query.radiusMeters !== undefined
                     ? parseFloat(req.query.radiusMeters)
                     : 70;
-
+            console.log("Controller --------> ", lat , lon ,radius )
             if (isNaN(lat) || isNaN(lon)) {
                 return res
                     .status(400)
