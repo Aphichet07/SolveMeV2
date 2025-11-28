@@ -43,7 +43,6 @@ export default function TipAfterChatPage({
 
       const data = await res.json();
 
-      // LINE Pay จะส่ง back url ที่ต้อง redirect ไป
       if (data.paymentUrl?.web) {
         window.location.href = data.paymentUrl.web;
       } else if (data.paymentUrl?.app) {
