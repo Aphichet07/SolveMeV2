@@ -1,3 +1,4 @@
+// controllers/dailyQuest.controller.js
 import dailyQuestService from "../services/quest.service.js";
 
 const dailyQuestController = {

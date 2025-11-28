@@ -93,7 +93,7 @@ const bubbleService = {
     const nowMs = Date.now();
     const expMs = Number(expiresInMinutes || 0) * 60 * 1000;
 
-    const createdAt = admin.firestore.FieldValue.serverTimestamp();
+    const created_at = admin.firestore.FieldValue.serverTimestamp();
     const expiresAt =
       expMs > 0
         ? admin.firestore.Timestamp.fromMillis(nowMs + expMs)
@@ -106,7 +106,7 @@ const bubbleService = {
       expiresInMinutes: Number(expiresInMinutes) || 0,
       status: "OPEN", // OPEN | MATCHED | CLOSED
       priority,
-      createdAt,
+      created_at,
       expiresAt,
       location: location || null,
       // solverId: null,

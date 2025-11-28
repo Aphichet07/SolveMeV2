@@ -1,7 +1,7 @@
 import * as line from "@line/bot-sdk";
 
 const client = new line.messagingApi.MessagingApiClient({
-  channelAccessToken: process.env.CHANAL_ACCESS_TOKEN, 
+  channelAccessToken: process.env.CHANAL_ACCESS_TOKEN 
 });
 
 const LIFF_URL =
@@ -17,7 +17,8 @@ async function sendMatchNotificationToSolver({ solverLineId, roomId, bubble }) {
   const deepLink = `${LIFF_URL}?roomId=${encodeURIComponent(
     roomId
   )}&bubbleId=${encodeURIComponent(bubbleId || "")}`;
-
+  
+  console.log("Link : ",deepLink )
   console.log("[LINE PUSH] to       =", solverLineId);
   console.log("[LINE PUSH] roomId   =", roomId);
   console.log("[LINE PUSH] bubbleId =", bubbleId);
@@ -29,10 +30,10 @@ async function sendMatchNotificationToSolver({ solverLineId, roomId, bubble }) {
       messages: [
         {
           type: "template",
-          altText: "SolveMe: คุณได้รับเคสใหม่",
+          altText: "SolveMe: คุณได้รับคำขอช่วยเหลือใหม่",
           template: {
             type: "buttons",
-            title: bubble?.title?.slice(0, 40) || "คุณได้รับเคสใหม่",
+            title: bubble?.title?.slice(0, 40) || "คุณได้รับคำขอช่วยเหลือ",
             text:
               bubble?.description?.slice(0, 60) ||
               "มีคนต้องการความช่วยเหลือใกล้คุณ กดเพื่อเข้าไปยังห้องแชท",
