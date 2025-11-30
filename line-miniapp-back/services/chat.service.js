@@ -1,5 +1,5 @@
 import userStatsService from "./userStats.service.js";
-import { db } from "../firebase/admin.js";
+import { admin, db } from "../firebase/admin.js";
 
 const chatService = {
   async completeChatAndUpdateStats({
@@ -25,7 +25,7 @@ const chatService = {
     await matchRef.set(
       {
         status: "COMPLETED",
-        completed_at: FieldValue.serverTimestamp(),
+        completed_at: admin.firestore.FieldValue.serverTimestamp(),
         bubble_id: bubbleId || null,
       },
       { merge: true }

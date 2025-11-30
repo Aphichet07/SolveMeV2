@@ -17,12 +17,25 @@ async function getBubbleById(bubbleId) {
 }
 
 async function findCandidateSolversNearBubble(bubble) {
+  if (
+    !bubble?.location ||
+    typeof bubble.location.lat !== "number" ||
+    typeof bubble.location.lon !== "number"
+  ) {
+    console.warn("[findCandidateSolversNearBubble] bubble has no location");
+    return [];
+  }
+
   const usersRef = db.collection(USER_COLLECTION);
 
-  // 1) query ให้ตรงกับ schema จริง
+  // เอาเฉพาะ user ที่
+  // - active == true
+  // - is_ready == true
+  // - wait_mode == true  (เปิดโหมดรอเคสอัตโนมัติ)
   const snapshot = await usersRef
     .where("active", "==", true)
     .where("is_ready", "==", true)
+    .where("wait_mode", "==", true)
     .get();
 
   const candidates = [];
@@ -32,7 +45,7 @@ async function findCandidateSolversNearBubble(bubble) {
   snapshot.forEach((doc) => {
     const u = doc.data();
 
-    // 2) ใช้ last_location แทน location
+    // ใช้ last_location เป็นหลัก ถ้าไม่มีค่อย fallback ไป location
     const userLat = u.last_location?.lat ?? u.location?.lat;
     const userLon = u.last_location?.lon ?? u.location?.lon;
 
@@ -75,6 +88,66 @@ async function findCandidateSolversNearBubble(bubble) {
 
   return candidates;
 }
+
+// async function findCandidateSolversNearBubble(bubble) {
+//   const usersRef = db.collection(USER_COLLECTION);
+
+//   // 1) query ให้ตรงกับ schema จริง
+//   const snapshot = await usersRef
+//     .where("active", "==", true)
+//     .where("is_ready", "==", true)
+//     .get();
+
+//   const candidates = [];
+
+//   console.log("[findCandidateSolversNearBubble] total users =", snapshot.size);
+
+//   snapshot.forEach((doc) => {
+//     const u = doc.data();
+
+//     // 2) ใช้ last_location แทน location
+//     const userLat = u.last_location?.lat ?? u.location?.lat;
+//     const userLon = u.last_location?.lon ?? u.location?.lon;
+
+//     if (typeof userLat !== "number" || typeof userLon !== "number") {
+//       console.log(
+//         "[findCandidateSolversNearBubble] skip user",
+//         doc.id,
+//         "no location"
+//       );
+//       return;
+//     }
+
+//     const dist = getDistanceMeters(
+//       bubble.location.lat,
+//       bubble.location.lon,
+//       userLat,
+//       userLon
+//     );
+
+//     console.log(
+//       "[findCandidateSolversNearBubble] user",
+//       doc.id,
+//       "dist =",
+//       dist
+//     );
+
+//     if (dist <= VISIBLE_RADIUS_METERS) {
+//       candidates.push({
+//         id: doc.id,
+//         ...u,
+//         distanceMeters: dist,
+//       });
+//     }
+//   });
+
+//   console.log(
+//     "[findCandidateSolversNearBubble] candidates in radius =",
+//     candidates.length
+//   );
+
+//   return candidates;
+// }
 
 // async function findCandidateSolversNearBubble(bubble) {
 //   const usersRef = db.collection(USER_COLLECTION);

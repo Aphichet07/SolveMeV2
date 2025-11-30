@@ -1,5 +1,5 @@
 import "../App.css";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 
 import FooterNav from "../components/footer";
 import Header from "../components/header";
@@ -13,48 +13,43 @@ import WalletPage from "./wallet.jsx";
 import WaitingForSolverPage from "./waiting.jsx";
 import ChatPage from "./chat.jsx";
 import DailyQuestAccordion from "../components/dairy.jsx";
+import SolverWaitToggle from "../components/SolverWaitToggle.jsx";
+
+const POLL_INTERVAL_MS = 10_000;
+const NEARBY_RADIUS_METERS = 70;
+const MAX_TITLE_LEN = 40;
+const MAX_DESC_LEN = 80;
+
+function toMillisFromFirestoreTimestamp(ts) {
+  if (!ts) return null;
+
+  if (ts._seconds != null) {
+    const seconds = ts._seconds;
+    const nanos = ts._nanoseconds || 0;
+    return seconds * 1000 + Math.floor(nanos / 1e6);
+  }
+
+  const parsed = new Date(ts);
+  return isNaN(parsed.getTime()) ? null : parsed.getTime();
+}
 
 function formatBubbleData(raw) {
-  const maxTitleLen = 40;
-  const maxDescLen = 80;
-
   let title = raw.title || "";
-  if (title.length > maxTitleLen) {
-    title = title.slice(0, maxTitleLen - 1) + "…";
+  if (title.length > MAX_TITLE_LEN) {
+    title = title.slice(0, MAX_TITLE_LEN - 1) + "…";
   }
 
   let description = raw.description || "";
-  if (description.length > maxDescLen) {
-    description = description.slice(0, maxDescLen - 1) + "…";
+  if (description.length > MAX_DESC_LEN) {
+    description = description.slice(0, MAX_DESC_LEN - 1) + "…";
   }
 
   let expiresAtMs = null;
 
   if (raw.expiresAt) {
-    if (raw.expiresAt._seconds != null) {
-      expiresAtMs =
-        raw.expiresAt._seconds * 1000 +
-        Math.floor((raw.expiresAt._nanoseconds || 0) / 1e6);
-    } else {
-      const d = new Date(raw.expiresAt);
-      if (!isNaN(d.getTime())) {
-        expiresAtMs = d.getTime();
-      }
-    }
+    expiresAtMs = toMillisFromFirestoreTimestamp(raw.expiresAt);
   } else if (raw.created_at && raw.expiresInMinutes != null) {
-    let createdMs = null;
-
-    if (raw.created_at._seconds != null) {
-      createdMs =
-        raw.created_at._seconds * 1000 +
-        Math.floor((raw.created_at._nanoseconds || 0) / 1e6);
-    } else {
-      const d = new Date(raw.created_at);
-      if (!isNaN(d.getTime())) {
-        createdMs = d.getTime();
-      }
-    }
-
+    const createdMs = toMillisFromFirestoreTimestamp(raw.created_at);
     if (createdMs != null) {
       expiresAtMs = createdMs + raw.expiresInMinutes * 60 * 1000;
     }
@@ -66,7 +61,8 @@ function formatBubbleData(raw) {
     description,
     profile: raw.requesterId || "Anonymous",
     distanceText: null,
-    priority: raw.priority || raw.status || "OPEN",
+    priority: raw.priority,
+    cetegory: raw.cetegory,
     expiresAtMs,
     raw,
   };
@@ -81,13 +77,33 @@ function HomePage({
   geoError,
   geoLoading,
 }) {
-  const [bubbles, setBubbles] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [errorMsg, setErrorMsg] = useState("");
-  const [searchText, setSearchText] = useState("");
+  const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
 
-  // view: "home" | "profile" | "wallet" | "create" | "waiting" | "chat"
-  const [view, setView] = useState(initialRoom ? "chat" : "home");
+  function useHeartbeat(lineUserId) {
+    useEffect(() => {
+      if (!lineUserId) return;
+
+      const sendHeartbeat = async () => {
+        try {
+          await fetch(`${API_BASE}/api/auth/heartbeat`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ line_id: lineUserId }),
+          });
+        } catch (err) {
+          console.error("heartbeat error:", err);
+        }
+      };
+
+      sendHeartbeat();
+
+      const id = setInterval(sendHeartbeat, 30 * 1000);
+
+      return () => clearInterval(id);
+    }, [lineUserId]);
+  }
+
+  const [view, setView] = useState(initialRoom ? "chat" : "home"); // "home" | "profile" | "wallet" | "create" | "waiting" | "chat"
 
   const [currentBubble, setCurrentBubble] = useState(
     initialRoom?.bubble || null
@@ -99,90 +115,86 @@ function HomePage({
     initialRoom?.otherUser || null
   );
 
+  // Bubble list state
+  const [bubbles, setBubbles] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [errorMsg, setErrorMsg] = useState("");
+  const [searchText, setSearchText] = useState("");
+
+  // Detail modal state
   const [selectedBubble, setSelectedBubble] = useState(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [isMatching, setIsMatching] = useState(false);
 
-  const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
+  const [tipContext, setTipContext] = useState(null);
+  // Navigation helpers
+  const goToProfile = () => setView("profile");
+  const goToWallet = () => setView("wallet");
+  const goToCreate = () => setView("create");
 
-  useEffect(() => {
-    console.log(" initialRoom changed to:", initialRoom);
-  }, [initialRoom]);
+  useHeartbeat(profile?.userId);
 
-  useEffect(() => {
-    if (role !== "requester") return;
+  const goToWaiting = (bubble) => {
+    if (!bubble) return;
+    setCurrentBubble(bubble);
+    setView("waiting");
+  };
 
-    let isCancelled = false;
-    let intervalId = null;
-
-    async function fetchBubblesForRequester() {
-      try {
-        if (isCancelled) return;
-
-        setIsLoading(true);
-        setErrorMsg("");
-
-        const res = await fetch(`${API_BASE}/api/bubbles/list`, {
-          headers: {
-            "Content-Type": "application/json",
-          },
-        });
-
-        if (!res.ok) {
-          const data = await res.json().catch(() => ({}));
-          throw new Error(data.message || "โหลด bubble ไม่สำเร็จ");
-        }
-
-        const data = await res.json();
-        console.log("[Requester] raw bubbles:", data);
-        const formatted = (data || []).map(formatBubbleData);
-
-        if (!isCancelled) {
-          setBubbles(formatted);
-        }
-      } catch (err) {
-        console.error(err);
-        if (!isCancelled) {
-          setErrorMsg(err.message || "เกิดข้อผิดพลาดในการโหลด bubble");
-        }
-      } finally {
-        if (!isCancelled) {
-          setIsLoading(false);
-        }
-      }
+  const goToChat = ({ bubble, roomId, otherUser }) => {
+    if (!roomId) {
+      console.warn("[goToChat] roomId is required");
+      return;
     }
 
-    fetchBubblesForRequester();
-    intervalId = setInterval(fetchBubblesForRequester, 10_000);
+    setCurrentBubble(bubble || null);
+    setCurrentRoomId(roomId);
+    setCurrentOtherUser(otherUser || null);
+    setView("chat");
+  };
 
-    return () => {
-      isCancelled = true;
-      if (intervalId) clearInterval(intervalId);
-    };
-  }, [role, profile?.userId, API_BASE]);
+  const goHome = () => setView("home");
 
+  const goHomeAndResetSession = () => {
+    setView("home");
+    setCurrentBubble(null);
+    setCurrentRoomId(null);
+    setCurrentOtherUser(null);
+  };
+
+  // Polling bubble list
   useEffect(() => {
-    if (role !== "solver") return;
-    if (!geo) return;
-
     let isCancelled = false;
     let intervalId = null;
 
-    async function fetchBubblesForSolver() {
+    async function fetchBubbles() {
+      if (isCancelled) return;
+
+      // ถ้า role ไม่ใช่ requester หรือ solver ยังไม่ต้องโหลดอะไร
+      if (role !== "requester" && role !== "solver") {
+        return;
+      }
+
+      // solver ต้องมี geo ถึงจะโหลด nearby ได้
+      if (role === "solver" && !geo) {
+        return;
+      }
+
+      setIsLoading(true);
+      setErrorMsg("");
+
       try {
-        if (isCancelled) return;
+        let url = "";
 
-        setIsLoading(true);
-        setErrorMsg("");
-
-        const params = new URLSearchParams({
-          lat: String(geo.lat),
-          lon: String(geo.lon),
-          radiusMeters: String(70),
-        });
-
-        const url = `${API_BASE}/api/bubbles/nearby?${params.toString()}`;
-        console.log("[fetchBubblesForSolver] URL =", url);
+        if (role === "requester") {
+          url = `${API_BASE}/api/bubbles/list`;
+        } else if (role === "solver") {
+          const params = new URLSearchParams({
+            lat: String(geo.lat),
+            lon: String(geo.lon),
+            radiusMeters: String(NEARBY_RADIUS_METERS),
+          });
+          url = `${API_BASE}/api/bubbles/nearby?${params.toString()}`;
+        }
 
         const res = await fetch(url, {
           headers: {
@@ -192,22 +204,29 @@ function HomePage({
 
         if (!res.ok) {
           const data = await res.json().catch(() => ({}));
-          throw new Error(data.message || "โหลด bubble ใกล้คุณไม่สำเร็จ");
+          throw new Error(
+            data.message ||
+              (role === "solver"
+                ? "โหลด bubble ใกล้คุณไม่สำเร็จ"
+                : "โหลด bubble ไม่สำเร็จ")
+          );
         }
 
         const data = await res.json();
-        console.log("[Solver] raw nearby bubbles:", data);
-
         const formatted = (data || []).map(formatBubbleData);
-        console.log("[Solver] formatted nearby:", formatted);
 
         if (!isCancelled) {
           setBubbles(formatted);
         }
       } catch (err) {
-        console.error(err);
+        console.error("fetchBubbles error:", err);
         if (!isCancelled) {
-          setErrorMsg(err.message || "เกิดข้อผิดพลาดในการโหลด bubble ใกล้คุณ");
+          setErrorMsg(
+            err.message ||
+              (role === "solver"
+                ? "เกิดข้อผิดพลาดในการโหลด bubble ใกล้คุณ"
+                : "เกิดข้อผิดพลาดในการโหลด bubble")
+          );
         }
       } finally {
         if (!isCancelled) {
@@ -216,8 +235,8 @@ function HomePage({
       }
     }
 
-    fetchBubblesForSolver();
-    intervalId = setInterval(fetchBubblesForSolver, 10_000);
+    fetchBubbles();
+    intervalId = setInterval(fetchBubbles, POLL_INTERVAL_MS);
 
     return () => {
       isCancelled = true;
@@ -225,46 +244,30 @@ function HomePage({
     };
   }, [role, geo, API_BASE]);
 
-  async function fetchUserProfile(userId, API_BASE) {
-    if (!userId) return null;
+  // Filter bubbles (search + expired)
+  const filteredBubbles = useMemo(() => {
+    const now = Date.now();
+    const q = searchText.trim().toLowerCase();
 
-    try {
-      const res = await fetch(`${API_BASE}/api/users/profile/${userId}`);
-      if (res.ok) {
-        const profile = await res.json();
-        return {
-          userId: profile.userId || userId,
-          name: profile.displayName || "Requester",
-          pictureUrl: profile.pictureUrl || null,
-        };
+    return bubbles.filter((b) => {
+      if (b.expiresAtMs && b.expiresAtMs <= now) {
+        return false;
       }
-    } catch (e) {
-      console.error("Error fetching user profile:", e);
-    }
+      if (!q) return true;
+      return (
+        b.title.toLowerCase().includes(q) ||
+        b.description.toLowerCase().includes(q)
+      );
+    });
+  }, [bubbles, searchText]);
 
-    // Fallback profile
-    return { userId, name: "Requester", pictureUrl: null };
-  }
-
-  const filteredBubbles = bubbles.filter((b) => {
-    if (b.expiresAtMs && b.expiresAtMs <= Date.now()) {
-      return false;
-    }
-
-    if (!searchText.trim()) return true;
-    const q = searchText.toLowerCase();
-    return (
-      b.title.toLowerCase().includes(q) ||
-      b.description.toLowerCase().includes(q)
-    );
-  });
-
+  // Callbacks
   const handleRequesterMatched = ({ bubble, roomId, solver }) => {
-    console.log("RoomId from handleRequesterMatched : ", roomId);
-    setCurrentBubble(bubble);
-    setCurrentRoomId(roomId);
-    setCurrentOtherUser(solver || null);
-    setView("chat");
+    goToChat({
+      bubble,
+      roomId,
+      otherUser: solver || null,
+    });
   };
 
   const handleOpenBubbleDetail = (bubble) => {
@@ -277,7 +280,6 @@ function HomePage({
     setSelectedBubble(null);
   };
 
-  // solver กด "Match" จากหน้า bubble detail → สร้าง room แล้วเข้า chat ด้วย roomId
   const handleMatchBubble = async (bubble) => {
     if (!bubble || !profile?.userId) return;
     if (role !== "solver") return;
@@ -295,8 +297,6 @@ function HomePage({
       });
 
       const data = await res.json().catch(() => ({}));
-      console.log("solver-accept result:", data);
-
       if (!res.ok) {
         if (data.status === "ALREADY_TAKEN") {
           alert("เคสนี้ถูก solver คนอื่นรับไปแล้ว");
@@ -310,11 +310,14 @@ function HomePage({
 
       if (data.status === "MATCHED" || data.status === "ALREADY_MATCHED") {
         const roomId = data.roomId;
-        setCurrentBubble(data.bubble || bubble);
-        setCurrentRoomId(roomId);
-        setCurrentOtherUser(null);
+        const bubbleFromServer = data.bubble || bubble;
+
         setIsDetailOpen(false);
-        setView("chat");
+        goToChat({
+          bubble: bubbleFromServer,
+          roomId,
+          otherUser: null,
+        });
       }
     } catch (err) {
       console.error("match bubble error:", err);
@@ -324,63 +327,92 @@ function HomePage({
     }
   };
 
+  // View switching
+
   if (view === "profile") {
-    console.log("view : ", view);
-    return <ProfilePage profile={profile} onBack={() => setView("home")} />;
+    return <ProfilePage profile={profile} onBack={goHome} />;
   }
 
   if (view === "wallet") {
-    return <WalletPage onBack={() => setView("home")} />;
+    return <WalletPage onBack={goHome} />;
   }
 
   if (view === "create") {
-    console.log("view : ", view);
     return (
       <CreateBubblePage
         profile={profile}
-        onBack={() => setView("home")}
+        onBack={goHome}
         onCreated={(createdBubble) => {
-          setCurrentBubble(createdBubble);
-          setView("waiting");
+          goToWaiting(createdBubble);
         }}
       />
     );
   }
 
   if (view === "waiting") {
-    console.log("view : ", view);
-    console.log("currentRoomId : ", currentRoomId);
     return (
       <WaitingForSolverPage
         bubble={currentBubble}
         onBack={() => {
           setCurrentBubble(null);
-          setView("home");
+          goHome();
         }}
         onMatched={handleRequesterMatched}
       />
     );
   }
 
+  // if (view === "chat") {
+  //   return (
+  //     <ChatPage
+  //       profile={profile}
+  //       roomId={currentRoomId}
+  //       bubble={currentBubble}
+  //       otherUser={currentOtherUser}
+  //       role={role}
+  //       onBack={goHomeAndResetSession}
+  //     />
+  //   );
+  // }
   if (view === "chat") {
-    console.log("view : ", view);
-    console.log("currentRoomId : ", currentRoomId);
     return (
       <ChatPage
         profile={profile}
         roomId={currentRoomId}
         bubble={currentBubble}
         otherUser={currentOtherUser}
-        role={role}
+        role={role} // หรือ "solver" ตาม logic คุณ
         onBack={() => {
           setView("home");
           setCurrentRoomId(null);
           setCurrentBubble(null);
           setCurrentOtherUser(null);
         }}
+        onGoToTip={({ matchId, bubble, solver, requesterId }) => {
+          setTipContext({ matchId, bubble, solver, requesterId });
+          setView("tip");
+        }}
       />
     );
   }
+
+  if (view === "tip") {
+    return (
+      <TipPage
+        profile={profile}
+        tipContext={tipContext}
+        onBackHome={() => {
+          setView("home");
+          setCurrentRoomId(null);
+          setCurrentBubble(null);
+          setCurrentOtherUser(null);
+          setTipContext(null);
+        }}
+      />
+    );
+  }
+
+  // Home view
 
   return (
     <div className="min-h-screen bg-slate-50 flex justify-center">
@@ -391,12 +423,21 @@ function HomePage({
           <SearchBar value={searchText} onChange={setSearchText} />
 
           {role === "solver" && (
-            <div className="mb-3">
-              <DailyQuestAccordion
-                lineId={profile?.userId}
-                className="text-[12px]"
+            <>
+              <div className="mb-3">
+                <DailyQuestAccordion
+                  lineId={profile?.userId}
+                  className="text-[12px]"
+                />
+              </div>
+
+              {/* สวิตช์เปิด/ปิดรอเคส */}
+              <SolverWaitToggle
+                profile={profile}
+                geo={geo}
+                initialWaitMode={profile?.wait_mode}
               />
-            </div>
+            </>
           )}
 
           {errorMsg && (
@@ -417,7 +458,7 @@ function HomePage({
 
           <p className="mt-1 text-[11px] text-slate-500">
             {role === "solver"
-              ? "กำลังแสดงปัญหาที่อยู่ใกล้คุณ (ประมาณ 20 เมตร)"
+              ? "กำลังแสดงปัญหาที่อยู่ใกล้คุณ (ประมาณ 50 เมตร)"
               : "กำลังแสดงปัญหาที่ถูกสร้างในระบบ"}
           </p>
 
@@ -429,9 +470,9 @@ function HomePage({
         </main>
 
         <FooterNav
-          onPlusClick={() => setView("create")}
-          onProfileClick={() => setView("profile")}
-          onWalletClick={() => setView("wallet")}
+          onPlusClick={goToCreate}
+          onProfileClick={goToProfile}
+          onWalletClick={goToWallet}
         />
 
         <BubbleDetailModal

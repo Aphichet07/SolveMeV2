@@ -116,7 +116,7 @@ export default function BubbleDetailModal({
               rounded-full
               border border-slate-600
               text-sm
-              text-slate-200
+              text-slate-800
               hover:bg-slate-700/80
               transition-colors
             "

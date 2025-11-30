@@ -1,5 +1,6 @@
 import { db } from "../utils/firebaseClient.js";
 import { collection, Timestamp } from "firebase/firestore";
+import { doc } from "firebase/firestore";
 
 const ChatRoomSchemas = {
   match_id: String,
@@ -19,8 +20,11 @@ const getMessagesCollection = (chatRoomId) => {
     console.warn("[getMessagesCollection] chatRoomId is empty");
   }
   return collection(db, "rooms", chatRoomId, "messages");
-
 };
 
-export { getMessagesCollection, ChatRoomSchemas, ChatMessageSchemas };
+ const getRoomDoc = (roomId)=> {
+  return doc(db, "rooms", roomId);
+}
+
+export { getMessagesCollection, ChatRoomSchemas, ChatMessageSchemas, getRoomDoc};
 export default getMessagesCollection;

@@ -15,7 +15,7 @@ import TipAfterChatPage from "./pages/tipPage.jsx"
 import BubbleDetailModal from "./components/BubbleDetailModel.jsx"
 import DailyQuestAccordion from "./components/dairy.jsx"
 import CarryProfilePage from "./pages/CarryProfilePage.jsx"
-
+import TipModal from "./components/TipModal.jsx"
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <App />

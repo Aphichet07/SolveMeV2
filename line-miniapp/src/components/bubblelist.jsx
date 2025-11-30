@@ -52,6 +52,7 @@ export default function BubbleList({ items, isLoading, onItemClick }) {
                 profile={b.profile}
                 distanceText={b.distanceText}
                 priority={b.priority}
+                category={b.raw?.category}
                 expiresAtMs={b.expiresAtMs} 
                 onClick={() => onItemClick && onItemClick(b)}
               />
