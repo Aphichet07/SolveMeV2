@@ -1,5 +1,5 @@
 import React from "react";
-import Bubble from "./bubble";
+import Bubble from "./bubble.jsx";
 
 export default function BubbleList({ items, isLoading, onItemClick }) {
   if (isLoading) {

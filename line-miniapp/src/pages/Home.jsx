@@ -2,10 +2,10 @@ import "../App.css";
 import React, { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 
-import FooterNav from "../components/footer";
-import Header from "../components/header";
-import SearchBar from "../components/searchbar";
-import BubbleList from "../components/bubblelist";
+import FooterNav from "../components/footer.jsx";
+import Header from "../components/header.jsx";
+import SearchBar from "../components/searchbar.jsx";
+import BubbleList from "../components/bubblelist.jsx";
 import BubbleDetailModal from "../components/BubbleDetailModel.jsx";
 import DailyQuestAccordion from "../components/dairy.jsx";
 import SolverWaitToggle from "../components/SolverWaitToggle.jsx";

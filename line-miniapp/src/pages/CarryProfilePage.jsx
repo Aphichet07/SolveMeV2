@@ -1,6 +1,6 @@
 import React, { useState } from "react";
-import Header from "../components/header";
-import FooterNav from "../components/footer";
+import Header from "../components/header.jsx";
+import FooterNav from "../components/footer.jsx";
 
 const OPTION_SET = [
   { value: "ALWAYS", label: "แทบทุกครั้ง" },
