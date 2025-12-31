@@ -1,4 +1,5 @@
 import React from "react";
+import { useNavigate } from "react-router-dom";
 
 const LIFF_COUPON_URL =
   import.meta.env.VITE_LIFF_COUPON_URL ||

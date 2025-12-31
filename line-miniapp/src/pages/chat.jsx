@@ -6,6 +6,7 @@ import {
   addDoc,
   serverTimestamp,
 } from "firebase/firestore";
+import { useNavigate } from "react-router-dom";
 import { getMessagesCollection } from "../models/chat_message.model.js";
 import EndChatConfirmModal from "../components/EndChatConfirmModal.jsx";
 import TipModal from "../components/TipModal.jsx";

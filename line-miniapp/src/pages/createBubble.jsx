@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import GuEng from "../assets/solve.png";
-
+import { useNavigate } from "react-router-dom";
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
 
 export default function CreateBubblePage({ profile, onBack, onCreated }) {

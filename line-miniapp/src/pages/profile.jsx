@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 import FooterNav from "../components/footer.jsx";
 import HomePage from "./Home.jsx";
